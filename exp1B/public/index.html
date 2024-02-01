@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Psychology Experiment</title>
+    <script src="jspsych/jspsych.js"></script>
+    <script src="jspsych/plugin-html-button-response.js"></script>
+    <script src="jspsych/plugin-image-button-response.js"></script>
+    <script src="jspsych/plugin-survey-html-form.js"></script>
+    <script src="jspsych/plugin-survey-text.js"></script>
+    <script src="jspsych/plugin-instructions.js"></script>
+    <script src="jspsych/plugin-preload.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="Rotary-Switch-Plugin/jquery.rotaryswitch.modified.js"></script>
+<!--     <script src="./firebaseconfig.js"></script>
+    <script src="./firebasepsych1.0.js" type="module"></script> -->
+    <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+    <link href="Rotary-Switch-Plugin/jquery.rotaryswitch.modified.css" rel="stylesheet">
+  </head>
+  <body>
+  </body>
+  <script type="module">
+
+    // Importing functions and variables from the FirebasePsych library
+    // import { writeRealtimeDatabase,writeURLParameters,readRealtimeDatabase,
+    //     blockRandomization,finalizeBlockRandomization,firebaseUserId } from "./firebasepsych1.0.js";
+
+    const studyId = 'exp1B_test';
+    const DEBUG = false;
+    let endLink = "PROLIFIC LINK GOES HERE";
+
+    //Code for randomizing subjects between conditions
+    const maxCompletionTimeMinutes = 60;
+    //0 refers to a 1-to-1 mapping, 1 is all equal, 2 is double stars on C vs B
+    const conditionName = 'PayoutCondition'
+    let numConditions = 3;
+    let numDraws = 1;
+    let CONDITION = 0;
+    //let CONDITION = await blockRandomization( studyId , conditionName , numConditions ,maxCompletionTimeMinutes , numDraws ); // the await keyword is mandatory
+    //let msg = "Participant is assigned condition " + CONDITION;
+
+    const jsPsych = initJsPsych({
+      on_trial_start: function () {
+        if (DEBUG) {
+          endLink = "";
+        }
+      },
+      on_finish: function() {
+        if (DEBUG) {
+          jsPsych.data.displayData();
+        }
+      }
+    });
+
+    jsPsych.data.addProperties({condition: CONDITION});
+
+    //If you change these, make sure to change the instructions
+    let maxAttempts = 10; //30 for exp1A
+    let nBlocks = 3; //9 for exp1A
+    let starGoal = 150;
+
+    if (DEBUG) {
+      maxAttempts = 5;
+      nBlocks = 3;
+      starGoal = 10;
+    } 
+
+    //Initialize metrics
+    let blockNum = 0;
+    let trialNum = 0;
+    let starTotal = 0;
+
+    //Machine settings for the training blocks
+    const nSettings = 5;
+    let machineType = "A";
+    let maxStars = 6;
+    let current = [0, 0, 0]; // Current knob positions
+    let combo = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+
+    //machine settings for all 3
+    let starsA;
+    let starsB;
+    let starsC;
+    if (CONDITION == 0){
+      starsA = 7;
+      starsB = 9;
+      starsC = 11;
+    } else if (CONDITION == 1) {
+      starsA = 8;
+      starsB = 8;
+      starsC = 8;
+    } else if (CONDITION == 2) {
+      starsA = 6;
+      starsB = 10;
+      starsC = 20;
+    }
+    let currentA = [0, 0, 0];
+    let currentB = [0, 0, 0, 0];
+    let currentC = [0, 0, 0, 0, 0];
+    let comboA = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+    let comboB = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+    let comboC = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+
+    
+
+
+    function arrayEquals(a, b) {
+      return a.length === b.length && a.every((val, index) => val === b[index]);
+    }
+
+
+    function calc_hamming(guess, target) {
+      let distance = 0;
+      for (let i = 0; i < target.length; i++) {
+        distance += Math.min(Math.abs(target[i] - guess[i]), 
+                            nSettings - Math.abs(target[i] - guess[i])); 
+      };
+      return distance;
+    };
+
+    function dist_to_stars(h_distance, maxStars, machine) {
+      if (h_distance == 0) {
+        return maxStars;
+      } else {
+        let num_stars = maxStars - h_distance;
+        if ((machine == 'C') && (num_stars <= 4)) {
+          return 0;
+        } else if (num_stars < 1) {
+          return 1; //this makes it impossible to get 0 stars for machines A & B
+        // } else if ((CONDITION == 2) && (machineType == 'C')) {
+        //   if (h_distance == 10) {
+        //     return 1;
+        //   } else {
+        //     num_stars = maxStars - (h_distance*2);
+        //     return num_stars;
+        //   }
+        } else {
+          return num_stars;
+        }
+      }
+    }
+
+    var timeline = [];
+
+    const consent = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus:`
+              <style>
+                  p, h2, ul {
+                      text-align: left;
+                  }
+
+                  p, ul {
+                      font-size: medium;
+                  }
+              </style>
+              
+              <h2>We need your consent to proceed</h2> 
+              <hr />
+              <p> YOUR IRB INFO GOES HERE
+              </p>
+              <hr />
+              <p> By selecting the &quot;I agree&quot; option below, I acknowledge that I have read this consent form, and that I agree to take part in the research.
+              </p>`,
+      choices: ['I agree', 'No thanks, I do not want to do this study'],
+      data: {block: 'consent'},
+      on_finish: function(data) {
+          if (data.response == "1") {
+              jsPsych.endExperiment('Consent was not given so this study may now be returned.');
+          }
+      }
+    };
+
+    const preload_media = {
+      type: jsPsychPreload,
+      images: ['machineA.png', 'machineB.png', 'machineC.png','feedback_example.png', 
+              'three_ovens_instruction.png', 'knob_example.png','oven_in_kitchen.png', 
+              'cake2.png', 'cake3.png', 'cake4.png', 'kitchen_bg.png', 'tall_oven.png', 
+              'ovenCbase.png', 'shelf.png']
+    }
+
+    const instructions = {
+      type: jsPsychInstructions,
+      pages: [` 
+      <style>
+
+      .text {
+
+      }
+      </style>
+      <div class="text">
+      <p>For this task, you will need to earn stars using a high tech machine called the IntelliBaker, which can bake cakes in mere seconds. The IntelliBaker works by turning the knobs on the machine to various settings and pushing the "Bake" button to create a cake. </p>
+      <img src="machineA.png" style="width:500px">
+      </div>
+      `,
+      `
+      <div>
+      <p> Each time the IntelliBaker produces a cake, that cake will be given a star rating. The better the cake, the more stars it receives. </p>
+      <img src="feedback_example.png" style="width:500px">
+        </div>
+      `, 
+      `<div>
+      <p> Your goal is to find the best combination of settings which will earn you the most stars. On each attempt, you may turn the knobs exactly one notch forward or backward from their current setting. The closer your attempts are to the best combination, the more stars you will earn.</p>
+      <img src="knob_example.png" style="width:500px">
+        </div>
+      `,
+      `<p>First, you will practice on three different versions of the IntelliBaker. You will have 10 attempts to find the best combination for your current version. If you find the best combination before you use up all your attempts, you will immediately move on to the next machine.</p>
+        `
+      ],
+      show_clickable_nav: true,
+      show_page_number: true,
+      on_load: function(){
+        // $(".nblocks").html(nBlocks); this doesn't work for some reason
+        // $(".nattempts").html(maxAttempts);
+        // Save URL parameters to the path: "studyId/participantData/[firebaseUserId]/participantInfo"
+        //writeURLParameters( studyId+'/participantData/'+firebaseUserId+ '/participantInfo' );
+        // Add the date to this path
+        const date = new Date();
+        //writeRealtimeDatabase( studyId+'/participantData/'+firebaseUserId+ '/participantInfo/dateStarted' , date.toString() );
+        if (DEBUG) {
+          console.log(msg) //shows what condition has been assigned
+        }
+      }
+    }
+ 
+
+    const introA = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p>Next, you will use this version of the IntelliBaker. This machine has a unique combination that will produce the highest amount of stars. The most stars you can get with this machine is <span class="numStars"></span> stars.</p>
+        <img src="machineA.png" style="width:500px">`,
+      choices: ['Continue'],
+      on_load: function (){
+        blockNum += 1;
+        trialNum = 0;
+        maxStars = starsA;
+        starTotal = 0;
+        machineType = "A";
+        current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);;
+        combo = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+        let starsInit = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        while (calc_hamming(current, combo) != (starsA - starsInit)) {
+          current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+        }
+        $(".numStars").html(maxStars);
+      },
+      on_finish: function(data){
+        data.machine = machineType;
+      }
+    }
+
+    const introB = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p>Next, you will use this version of the IntelliBaker. This machine has a unique combination that produces the highest amount of stars. The most stars you can get with this machine is <span class="numStars"></span> stars.</p>
+        <img src="machineB.png" style="width:500px">`,
+      choices: ['Continue'],
+      on_load: function (){
+        blockNum += 1;
+        trialNum = 0;
+        maxStars = starsB; 
+        starTotal = 0;
+        machineType = "B";
+        current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+        combo = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+        let starsInit = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        while (calc_hamming(current, combo) != (starsB - starsInit)) {
+          current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+        }
+        $(".numStars").html(maxStars);
+      },
+      on_finish: function(data){
+        data.machine = machineType;
+      }
+    }
+
+    const introC = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p>Next, you will use this version of the IntelliBaker. This machine has a unique combination that produces the highest amount of stars. The most stars you can get with this machine is <span class="numStars"></span> stars.</p>
+        <img src="machineC.png" style="width:500px">`,
+      choices: ['Continue'],
+      on_load: function (){
+        blockNum += 1;
+        trialNum = 0;
+        maxStars = starsC; 
+        starTotal = 0;
+        machineType = "C";
+        current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+        combo = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+        let starsInit = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        while (calc_hamming(current, combo) != (starsC - starsInit)) {
+          current = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+        }
+        $(".numStars").html(maxStars);
+      },
+      on_finish: function(data){
+        data.machine = machineType;
+      }
+    }
+
+
+    const input_trial = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `
+        <style>
+
+        .oven {
+          position: relative;
+          display: flex;
+          height: 600px;
+          width: 800px;
+          background-image: url(oven_in_kitchen.png);
+          background-repeat: no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        .knob {
+          display: inline;
+          position: absolute;
+          width: 51px;
+          height: 51px;
+          top: 350px;
+          z-index: 2;
+        }
+
+        #bake {
+          position: relative;
+          left: 155px;
+          bottom: 235px;
+          padding: 6px 8px;
+          z-index: 10;
+        }
+
+        .toptext {
+          display: inline-block;
+          position: relative;
+          font-weight: bold;
+          z-index: 2;
+        }        
+
+        </style>
+
+        <div class="oven">
+
+        <p class="toptext" style="top:20px; left:280px;"> 
+        Attempt <span class='total'></span></p> 
+
+        <p class="toptext" style="top:20px;left:430px;">
+        Machine <span class="block"></span></p>
+
+        <div class="knob" style="left:180px">
+        <input type="text" class="rotarySwitch" id="knob1" value="0">
+        </div>
+
+        <div class="knob" style="left:270px;">
+        <input type="text" class="rotarySwitch" id="knob2" value="0">
+        </div>
+
+        <div class="knob" style="left:360px;">
+        <input type="text" class="rotarySwitch" id="knob3" value="0">
+        </div>
+
+        <div class="knob" style="left:450px;">
+        <input type="text" class="rotarySwitch" id="knob4" value="0">
+        </div>
+
+        <div class="knob" style="left:540px;">
+        <input type="text" class="rotarySwitch" id="knob5" value="0">
+        </div>
+
+        <p style="position:absolute;left:170px;top:525px; font-weight:bold;"> 
+        Try to find the combination that produces <span class="numStars"></span> stars.</p>
+        
+        </div>`,
+      choices: ['Bake'],
+      button_html: '<button class="jspsych-btn" id="bake">%choice%</button>',
+      on_load: function () {
+
+        $("#knob1").attr("value", current[0]);
+        $("#knob2").attr("value", current[1]);
+        $("#knob3").attr("value", current[2]);
+        if (machineType == "A") {
+          $("#bake").css({"background-color":"#4885e3", "border-color":"#4977bd"})
+          $("#knob4").hide();
+          $("#knob5").hide();
+        } else if (machineType == "C") {
+          $(".oven").css({"background-image":"url(wide_oven_in_kitchen.png)"})
+          $(".knob").css({"top":"330px"})
+          $("#bake").css({"left":"250px", "bottom":"255px", "background-color":"#df4f4f", "border-color":"#df4545"})
+          $("#knob4").attr("value", current[3]);
+          $("#knob5").attr("value", current[4]);
+        } else {
+          $("#knob4").attr("value", current[3]);
+          $("#knob5").hide();
+          $("#bake").css({"background-color":"#f4f245", "border-color":"#f0df53"})
+        }
+        
+        trialNum += 1;
+        //$(".total").html(starTotal + " / " + starGoal);
+        $(".total").html(trialNum + " out of " + maxAttempts);
+        $(".block").html(blockNum + " of " + nBlocks);
+        $(".numStars").html(maxStars);
+
+        var knob1 = $('#knob1').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[0],
+        });
+
+        var knob2 = $('#knob2').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[1],
+        });
+
+        var knob3 = $('#knob3').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[2],
+        });
+
+
+        knob1.on('change', function() {
+          //console.log(knob1.val());
+          current[0] = knob1.val();
+        });
+
+        knob2.on('change', function() {
+          // console.log(knob2.val());
+          current[1] = knob2.val();
+        });
+
+        knob3.on('change', function() {
+          //console.log(knob3.val());
+          current[2] = knob3.val();
+        });
+
+
+        if (machineType != "A") {
+          var knob4 = $('#knob4').rotaryswitch({
+            minimum: 0,
+            maximum: nSettings,
+            step: 1,
+            showMarks: true,
+            startValue: current[3],
+          });
+
+          knob4.on('change', function() {
+          //console.log(knob4.val());
+          current[3] = knob4.val();
+          });
+
+          if (machineType == "C") {
+            var knob5 = $('#knob5').rotaryswitch({
+            minimum: 0,
+            maximum: nSettings,
+            step: 1,
+            showMarks: true,
+            startValue: current[4],
+            });
+
+            knob5.on('change', function() {
+            current[4] = knob5.val();
+            });
+          }
+        } 
+
+
+      },
+      on_finish: function(data) {
+        data.guess = current;
+        data.machine = machineType;
+        data.combination = combo;
+        
+        data.block_num = blockNum;
+        data.trial_num = trialNum;
+
+        let hamming_dist = calc_hamming(current, combo);
+        let curReward = dist_to_stars(hamming_dist, maxStars, data.machine);
+        data.reward = curReward;
+        if (curReward == maxStars) {
+          data.num_tries = trialNum;
+        }; 
+
+        //Data format for exp1B
+        //writeRealtimeDatabase(studyId+'/participantData/'+firebaseUserId+'/expData/block' + blockNum + '/' + trialNum, data);
+      }
+    }
+
+
+    const result_trial = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `
+        <style>
+
+        .oven {
+          position: relative;
+          display: flex;
+          height: 600px;
+          width: 800px;
+          background: url(oven_in_kitchen.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        .cake {
+          position: absolute;
+          height: min-content;
+          width: 150px;
+          top: 180px; 
+          left: 300px; 
+        }
+
+        .knob {
+          display: inline;
+          position: absolute;
+          width: 51px;
+          height: 51px;
+          top: 350px;
+          z-index: 2;
+        }
+
+        p {
+          font-weight: bold;
+          z-index: 2;
+        }
+
+        #bake {
+          position: relative;
+          left: 155px;
+          bottom: 235px;
+          padding: 6px 8px;
+        }
+
+        </style>
+
+        <div class="oven">
+
+        <p id="toptext" style="position:relative; top:20px; margin-left:auto; margin-right:auto;"> 
+        You earned <span class='numStars'></span> from this cake! 
+        </p>
+
+        <img class="cake" id="res" src="cake4.png">
+
+        <div class="knob" style="left:180px">
+        <input type="text" class="rotarySwitch" id="knob1" value="0">
+        </div>
+
+        <div class="knob" style="left:270px;">
+        <input type="text" class="rotarySwitch" id="knob2" value="0">
+        </div>
+
+        <div class="knob" style="left:360px;">
+        <input type="text" class="rotarySwitch" id="knob3" value="0">
+        </div>
+
+        <div class="knob" style="left:450px;">
+        <input type="text" class="rotarySwitch" id="knob4" value="0">
+        </div>
+
+        <div class="knob" style="left:540px;">
+        <input type="text" class="rotarySwitch" id="knob5" value="0">
+        </div>
+        
+        </div>`,
+      choices: ['Bake'],
+      button_html: ['<button class="jspsych-btn" id="bake">%choice%</button>'],
+      trial_duration: 2000,
+      data: {
+        task: "result",
+      },
+      on_load: function () {
+
+        $("#knob1").attr("value", current[0]);
+        $("#knob2").attr("value", current[1]);
+        $("#knob3").attr("value", current[2]);
+        if (machineType == "A") {
+          $("#knob4").hide();
+          $("#knob5").hide();
+          $("#bake").css({"background-color":"#4885e3", "border-color":"#4977bd"})
+        } else if (machineType == "C") {
+          $(".oven").css({"background-image":"url(wide_oven_in_kitchen.png)"})
+          $(".cake").css({"top":"160px", "left":"330px"})
+          $(".knob").css({"top":"330px"})
+          $("#bake").css({"left":"250px", "bottom":"255px","background-color":"#df4f4f", "border-color":"#df4545"})
+          $("#knob4").attr("value", current[3]);
+          $("#knob5").attr("value", current[4]);
+        } else {
+          $("#knob4").attr("value", current[3]);
+          $("#knob5").hide();
+          $("#bake").css({"background-color":"#f4f245", "border-color":"#f0df53"})
+        }
+
+        $("#bake").prop("disabled", true);
+
+        let nstars = jsPsych.data.getLastTrialData().trials[0].reward;
+
+        if (nstars == 1) {
+          $(".numStars").html(nstars + " star"); 
+        } else {
+          $(".numStars").html(nstars + " stars"); 
+        }
+
+        if (nstars == maxStars) {
+          $("#res").attr("src","cake2.png");
+          // if (machineType == "A") {
+          //   $("#res").attr("src","cake2.png");
+          // } else if (machineType == "B") {
+          //   $("#res").attr("src","cake3.png");
+          //   $("#res").attr("style","width:150px; height:160px; top:140px;");
+          // }
+          $("#toptext").text("Congratulations! You earned the highest rating of " + maxStars + " stars!");
+        }
+
+        var knob1 = $('#knob1').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[0],
+        });
+
+        var knob2 = $('#knob2').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[1],
+        });
+
+        var knob3 = $('#knob3').rotaryswitch({
+          minimum: 0,
+          maximum: nSettings,
+          step: 1,
+          showMarks: true,
+          startValue: current[2],
+        });
+
+        knob1.on('change', function() {
+          current[0] = knob1.val();
+        });
+
+        knob2.on('change', function() {
+          current[1] = knob2.val();
+        });
+
+        knob3.on('change', function() {
+          current[2] = knob3.val();
+        });
+
+        if (machineType != "A") {
+          var knob4 = $('#knob4').rotaryswitch({
+            minimum: 0,
+            maximum: nSettings,
+            step: 1,
+            showMarks: true,
+            startValue: current[3],
+          });
+
+          knob4.on('change', function() {
+          current[3] = knob4.val();
+          });
+
+          if (machineType == "C") {
+            var knob5 = $('#knob5').rotaryswitch({
+            minimum: 0,
+            maximum: nSettings,
+            step: 1,
+            showMarks: true,
+            startValue: current[4],
+            });
+
+            knob5.on('change', function() {
+            current[4] = knob5.val();
+            });
+          }
+        } 
+
+      }
+    }
+
+    const intro3ovens = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `<p>Now the main task will start. This time you will see the 3 different IntelliBakers at once and your goal is to earn <span class="goal"></span> stars total. These machines work similarly to the ones you've seen before, but will have different optimal settings. You may use any of the machines at any point to earn stars towards the goal.</p>
+        <img src="three_ovens_instruction.png" style="width:500px">`,
+      choices: ['Start Task'],
+      on_load: function (){ 
+        $(".goal").html(starGoal);
+        starTotal = 0;
+        trialNum = 0;
+        machineType = 'ABC';
+        currentA = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+        let starsInitA = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        currentB = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+        let starsInitB = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        currentC = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+        let starsInitC = jsPsych.randomization.sampleWithReplacement([1, 2, 3], 1);
+        while (calc_hamming(currentA, comboA) != (starsA - starsInitA)) {
+          currentA = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 3);
+        }
+        while (calc_hamming(currentB, comboB) != (starsB - starsInitB)) {
+          currentB = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 4);
+        }
+        while (calc_hamming(currentC, comboC) != (starsC - starsInitC)) {
+          currentC = jsPsych.randomization.sampleWithReplacement([...Array(nSettings).keys()], 5);
+        }
+      },
+      on_finish: function(data) {
+        data.block_num = 4;
+        data.trial_num = trialNum;
+        data.startA = currentA;
+        data.startB = currentB;
+        data.startC = currentC;
+        //writeRealtimeDatabase(studyId+'/participantData/'+firebaseUserId+'/expData/threeOvens/' + trialNum, data);
+      }
+    }
+
+
+    const ovenA = `<div class="oven" id="ovenA">
+
+            <img class="cake" id="resA" src="cake4.png">
+
+            <p class="maxstars"> Max <span class="starsA"></span> stars </p>
+
+            <div class="knob" style="top:160px; left:50px">
+            <input type="text" class="rotarySwitch" id="knobA1" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:70px;">
+            <input type="text" class="rotarySwitch" id="knobA2" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:90px;">
+            <input type="text" class="rotarySwitch" id="knobA3" value="0">
+            </div>
+
+            </div>`
+
+    const ovenB = `<div class="oven" id="ovenB">
+
+            <img class="cake" id="resB" src="cake4.png">
+
+            <p class="maxstars"> Max <span class="starsB"></span> stars </p>
+
+            <div class="knob" style="top:165px;left:50px">
+            <input type="text" class="rotarySwitch" id="knobB1" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:70px;">
+            <input type="text" class="rotarySwitch" id="knobB2" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:90px;">
+            <input type="text" class="rotarySwitch" id="knobB3" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:110px;">
+            <input type="text" class="rotarySwitch" id="knobB4" value="0">
+            </div>
+
+            </div>`
+
+    const ovenC = `<div class="oven" id="ovenC">
+
+            <img class="cake" id="resC" src="cake4.png">
+
+            <p class="maxstars"> Max <span class="starsC"></span> stars </p>
+
+            <div class="knob" style="top:150px; left:70px">
+            <input type="text" class="rotarySwitch" id="knobC1" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:90px">
+            <input type="text" class="rotarySwitch" id="knobC2" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:110px">
+            <input type="text" class="rotarySwitch" id="knobC3" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:130px">
+            <input type="text" class="rotarySwitch" id="knobC4" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:150px">
+            <input type="text" class="rotarySwitch" id="knobC5" value="0">
+            </div>
+
+            </div>`
+
+    const oven_configs = [[ovenA, ovenB, ovenC], [ovenA, ovenC, ovenB],
+                          [ovenC, ovenB, ovenA], [ovenC, ovenA, ovenB],
+                          [ovenB, ovenA, ovenC], [ovenB, ovenC, ovenA]]
+    let config_num = jsPsych.randomization.sampleWithoutReplacement([0, 1, 2, 3, 4, 5], 1);
+    let oven_config = oven_configs[config_num];
+    
+    const modular_input = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `
+        <style>
+
+        .background {
+          position: relative;
+          display: flex;
+          height: 600px;
+          width: 900px;
+          background: url(kitchen_bg.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        #leftcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: left;
+          top: 258px;
+          left: 50px;
+          height: 250px;
+          width: 450px;
+        }
+
+        #topcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: center;
+          left: 220px;
+          height: 250px;
+          width: 450px;
+        }
+
+        #rightcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: right;
+          top: 258px;
+          left: 410px;
+          height: 250px;
+          width: 450px;
+        }
+
+        .oven {
+          position: absolute;
+          display: flex;
+          height: 270px;
+          width: 350px;
+          background: url(tall_oven.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        #ovenC {
+          height: 250px;
+          width: 450px;
+          background: url(ovenCbase.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+
+        .shelf {
+          position: absolute;
+          width: 420px;
+          top: 215px;
+          right: 240px;
+          z-index: auto;
+        }
+
+        .knob {
+          display: inline;
+          position: relative;
+          width: 38px;
+          height: 38px;
+          z-index: 2;
+        }
+
+        .rotaryswitchPlugin {
+          height: 38px;
+          width: 38px;
+        }
+
+        .rotaryswitchPlugin .mark {
+          left: 49%;
+          top: 44%;
+          height: 6px;
+        }
+
+        #bakeA {
+          position: relative;
+          bottom: 180px;
+          right: 70px;
+          background-color: #4885e3;
+          border-color: #4977bd;
+        }
+
+        #bakeB {
+          position: relative;
+          bottom: 435px;
+          left: 110px;
+          background-color: #f4f245;
+          border-color: #f0df53;
+        }
+
+
+        #bakeC {
+          position: relative;
+          bottom: 190px;
+          left: 280px;
+          background-color: #df4f4f;
+          border-color: #df4545;
+        }
+
+        .maxstars {
+          position: absolute;
+          top: 30%;
+          left: 35%;
+        }
+
+
+        </style>
+
+        <div class="background">
+
+          <p style="position:relative;top:20px;left:90px; font-weight:bold;"> 
+          Star Total: <span class='total'></span> </p>
+
+          <div id="topcontainer">
+            <div class="oven" id="ovenB">
+
+            <div class="knob" style="top:165px;left:50px">
+            <input type="text" class="rotarySwitch" id="knobB1" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:70px;">
+            <input type="text" class="rotarySwitch" id="knobB2" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:90px;">
+            <input type="text" class="rotarySwitch" id="knobB3" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:110px;">
+            <input type="text" class="rotarySwitch" id="knobB4" value="0">
+            </div>
+
+            </div>
+          </div>
+
+          <img src="shelf.png" class="shelf">
+
+          <div id="leftcontainer">
+            <div class="oven" id="ovenA">
+
+            <div class="knob" style="top:160px; left:50px">
+            <input type="text" class="rotarySwitch" id="knobA1" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:70px;">
+            <input type="text" class="rotarySwitch" id="knobA2" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:90px;">
+            <input type="text" class="rotarySwitch" id="knobA3" value="0">
+            </div>
+
+            </div>
+          </div>
+
+          <div id="rightcontainer">
+            <div class="oven" id="ovenC">
+
+            <div class="knob" style="top:150px; left:70px">
+            <input type="text" class="rotarySwitch" id="knobC1" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:90px">
+            <input type="text" class="rotarySwitch" id="knobC2" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:110px">
+            <input type="text" class="rotarySwitch" id="knobC3" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:130px">
+            <input type="text" class="rotarySwitch" id="knobC4" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:150px">
+            <input type="text" class="rotarySwitch" id="knobC5" value="0">
+            </div>
+
+            </div>
+          </div>
+
+        </div>
+      `,
+      choices: ['B', 'B', 'B'],
+      button_html: ['<button class="jspsych-btn" id="bakeA">%choice%</button>',
+                    '<button class="jspsych-btn" id="bakeB">%choice%</button>',
+                    '<button class="jspsych-btn" id="bakeC">%choice%</button>'],
+      on_load: function() {  
+
+        $(".total").html(starTotal + " / " + starGoal);
+
+        if (oven_config[0] === ovenB) {
+          $("#bakeB").css({"bottom":"180px", "left":"-110px"})
+          if (oven_config[1] === ovenC) { //BCA
+            $("#bakeC").css({"bottom":"450px", "left":"90px"})
+            $("#bakeA").css({"bottom":"180px", "left":"390px"})
+          } else {                        //BAC
+            $("#bakeC").css({"bottom":"190px", "left":"280px"})
+            $("#bakeA").css({"bottom":"435px", "left":"150px"})
+          }
+        } else if (oven_config[0] === ovenC) {
+          $("#bakeC").css({"bottom":"190px", "left":"-80px"})
+          if (oven_config[1] === ovenB) { //CBA
+            $("#bakeB").css({"bottom":"435px", "left":"110px"})
+            $("#bakeA").css({"bottom":"180px", "left":"390px"})
+          } else {                        //CAB
+            $("#bakeA").css({"bottom":"435px", "left":"150px"})
+            $("#bakeB").css({"bottom":"180px", "left":"350px"})
+          }
+        } else if (oven_config[0] === ovenA) {
+          $("#bakeA").css({"bottom":"180px", "right":"70px"})
+          if (oven_config[1] === ovenC) { //ACB
+            $("#bakeC").css({"bottom":"450px", "left":"90px"})
+            $("#bakeB").css({"bottom":"180px", "left":"350px"})
+          } else {                        //ABC
+            $("#bakeB").css({"bottom":"435px", "left":"110px"})
+            $("#bakeC").css({"bottom":"190px", "left":"280px"})
+          }
+        }
+
+        $("#leftcontainer").html(oven_config[0]);
+        $("#topcontainer").html(oven_config[1]);
+        $("#rightcontainer").html(oven_config[2]);
+        $(".cake").hide()
+        $(".starsA").html(starsA);
+        $(".starsB").html(starsB);
+        $(".starsC").html(starsC);
+
+        //This maintains the position of the knobs from previous attempts
+        for (var i = 0; i < 5; i++) {
+          if (i < 3) {
+            $("#knobA" + (i + 1)).attr("value", currentA[i]);
+            $("#knobB" + (i + 1)).attr("value", currentB[i]);
+          } else if (i == 3) {
+            $("#knobB" + (i + 1)).attr("value", currentB[i]);
+          }
+          $("#knobC" + (i + 1)).attr("value", currentC[i]);
+        }
+
+        //initializing the knobs
+        var Aknobs = [];
+        for (var i = 0; i < 4; ++i) {
+          Aknobs[i] = $('#knobA' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentA[i-1],
+            });
+        }
+
+        var Bknobs = [];
+        for (var i = 0; i < 5; ++i) {
+          Bknobs[i] = $('#knobB' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentB[i-1],
+            });
+        }
+
+
+        var Cknobs = [];
+        for (var i = 0; i < 6; ++i) {
+          Cknobs[i] = $('#knobC' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentC[i-1],
+            });
+        }
+
+        //Recording knob position with every click
+        Aknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            //console.log(knob.val());
+            currentA[index-1] = knob.val();
+          });
+        })
+
+        Bknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            currentB[index-1] = knob.val();
+          });
+        })
+        
+        Cknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            //console.log(knob.val());
+            currentC[index-1] = knob.val();
+          });
+        })
+
+      },
+      on_finish: function(data) {
+        trialNum += 1;
+        data.trial_num = trialNum;
+        data.block_num = 4;
+        data.configuration = config_num;
+        let mstars;
+
+        if (data.response == 0) {
+          data.machine = 'A';
+          data.guess = currentA;
+          combo = comboA;
+          mstars = starsA;
+        } else if (data.response == 1) {
+          data.machine = 'B'
+          data.guess = currentB;
+          combo = comboB;
+          mstars = starsB;
+        } else if (data.response == 2) {
+          data.machine = 'C';
+          data.guess = currentC;
+          combo = comboC;
+          mstars = starsC;
+        }
+
+        data.combinationA = comboA;
+        data.combinationB = comboB;
+        data.combinationC = comboC;
+        
+        let hamming_dist = calc_hamming(data.guess, combo);
+        let curReward = dist_to_stars(hamming_dist, mstars, data.machine);
+        data.reward = curReward;
+        starTotal += curReward;
+        data.stars_earned = starTotal;
+        data.goal = starGoal;
+        //writeRealtimeDatabase(studyId+'/participantData/'+firebaseUserId+'/expData/threeOvens/' + trialNum, data);
+      }
+    }
+
+
+    const modular_result = {
+      type: jsPsychHtmlButtonResponse,
+      stimulus: `
+        <style>
+
+        .background {
+          position: relative;
+          display: flex;
+          height: 600px;
+          width: 900px;
+          background: url(kitchen_bg.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        #leftcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: left;
+          top: 258px;
+          left: 50px;
+          height: 250px;
+          width: 450px;
+        }
+
+        #topcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: center;
+          left: 220px;
+          height: 250px;
+          width: 450px;
+        }
+
+        #rightcontainer {
+          position: absolute;
+          display: flex;
+          justify-content: right;
+          top: 258px;
+          left: 410px;
+          height: 250px;
+          width: 450px;
+        }
+
+        .oven {
+          position: absolute;
+          display: flex;
+          height: 270px;
+          width: 350px;
+          background: url(tall_oven.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        #ovenC {
+          height: 250px;
+          width: 450px;
+          background: url(ovenCbase.png) no-repeat;
+          background-size: contain;
+          background-position: center;
+        }
+
+        .shelf {
+          position: absolute;
+          width: 420px;
+          top: 215px;
+          right: 240px;
+          z-index: auto;
+        }
+
+        .knob {
+          display: inline;
+          position: relative;
+          width: 38px;
+          height: 38px;
+          z-index: 2;
+        }
+
+        .rotaryswitchPlugin {
+          height: 38px;
+          width: 38px;
+        }
+
+        .rotaryswitchPlugin .mark {
+          left: 49%;
+          top: 44%;
+          height: 6px;
+        }
+
+        #bakeA {
+          position: relative;
+          bottom: 180px;
+          right: 70px;
+          background-color: #4885e3;
+          border-color: #4977bd;
+        }
+
+        #bakeB {
+          position: relative;
+          bottom: 435px;
+          left: 110px;
+          background-color: #f4f245;
+          border-color: #f0df53;
+        }
+
+
+        #bakeC {
+          position: relative;
+          bottom: 190px;
+          left: 280px;
+          background-color: #df4f4f;
+          border-color: #df4545;
+        }
+
+        #resA {
+          position:absolute;
+          width: 150px;
+          top: 45px;
+          left: 100px;
+        }
+
+        #resB {
+          position:absolute;
+          width: 150px;
+          top: 45px;
+          left: 100px;
+        }
+
+        #resC {
+          position:absolute;
+          width: 150px;
+          top: 30px;
+          left: 150px;
+        }
+
+        </style>
+
+        <div class="background">
+          <div id="topcontainer">
+            <div class="oven" id="ovenB">
+
+            <img id="resB" src="cake4.png">
+
+            <div class="knob" style="top:165px;left:50px">
+            <input type="text" class="rotarySwitch" id="knobB1" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:70px;">
+            <input type="text" class="rotarySwitch" id="knobB2" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:90px;">
+            <input type="text" class="rotarySwitch" id="knobB3" value="0">
+            </div>
+
+            <div class="knob" style="top:165px;left:110px;">
+            <input type="text" class="rotarySwitch" id="knobB4" value="0">
+            </div>
+
+            </div>
+          </div>
+
+          <img src="shelf.png" class="shelf">
+
+          <div id="leftcontainer">
+            <div class="oven" id="ovenA">
+
+            <img id="resA" src="cake4.png">
+
+            <div class="knob" style="top:160px; left:50px">
+            <input type="text" class="rotarySwitch" id="knobA1" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:70px;">
+            <input type="text" class="rotarySwitch" id="knobA2" value="0">
+            </div>
+
+            <div class="knob" style="top:160px; left:90px;">
+            <input type="text" class="rotarySwitch" id="knobA3" value="0">
+            </div>
+
+            </div>
+          </div>
+
+          <div id="rightcontainer">
+            <div class="oven" id="ovenC">
+
+            <img id="resC" src="cake4.png">
+
+            <div class="knob" style="top:150px; left:70px">
+            <input type="text" class="rotarySwitch" id="knobC1" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:90px">
+            <input type="text" class="rotarySwitch" id="knobC2" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:110px">
+            <input type="text" class="rotarySwitch" id="knobC3" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:130px">
+            <input type="text" class="rotarySwitch" id="knobC4" value="0">
+            </div>
+
+            <div class="knob" style="top:150px; left:150px">
+            <input type="text" class="rotarySwitch" id="knobC5" value="0">
+            </div>
+
+            </div>
+          </div>
+
+          <p id="bottomtext"; style="position:absolute; bottom:3px; left:250px; font-weight: bold;"> 
+          You earned <span class='numStars'></span> from this cake! 
+          </p>
+
+        </div>
+      `,
+      choices: ['B', 'B', 'B'],
+      button_html: ['<button class="jspsych-btn" id="bakeA">%choice%</button>',
+                    '<button class="jspsych-btn" id="bakeB">%choice%</button>',
+                    '<button class="jspsych-btn" id="bakeC">%choice%</button>'],
+      trial_duration: 2000,
+      on_load: function() {  
+
+        if (oven_config[0] === ovenB) {
+          $("#bakeB").css({"bottom":"180px", "left":"-110px"})
+          if (oven_config[1] === ovenC) { //BCA
+            $("#bakeC").css({"bottom":"450px", "left":"90px"})
+            $("#bakeA").css({"bottom":"180px", "left":"390px"})
+          } else {                        //BAC
+            $("#bakeC").css({"bottom":"190px", "left":"280px"})
+            $("#bakeA").css({"bottom":"435px", "left":"150px"})
+          }
+        } else if (oven_config[0] === ovenC) {
+          $("#bakeC").css({"bottom":"190px", "left":"-80px"})
+          if (oven_config[1] === ovenB) { //CBA
+            $("#bakeB").css({"bottom":"435px", "left":"110px"})
+            $("#bakeA").css({"bottom":"180px", "left":"390px"})
+          } else {                        //CAB
+            $("#bakeA").css({"bottom":"435px", "left":"150px"})
+            $("#bakeB").css({"bottom":"180px", "left":"350px"})
+          }
+        } else if (oven_config[0] === ovenA) {
+          $("#bakeA").css({"bottom":"180px", "right":"70px"})
+          if (oven_config[1] === ovenC) { //ACB
+            $("#bakeC").css({"bottom":"450px", "left":"90px"})
+            $("#bakeB").css({"bottom":"180px", "left":"350px"})
+          } else {                        //ABC
+            $("#bakeB").css({"bottom":"435px", "left":"110px"})
+            $("#bakeC").css({"bottom":"190px", "left":"280px"})
+          }
+        }
+
+        $("#leftcontainer").html(oven_config[0]);
+        $("#topcontainer").html(oven_config[1]);
+        $("#rightcontainer").html(oven_config[2]);
+        $(".maxstars").hide()
+
+        //This maintains the position of the knobs from previous attempts
+        for (var i = 0; i < 5; i++) {
+          if (i < 3) {
+            $("#knobA" + (i + 1)).attr("value", currentA[i]);
+            $("#knobB" + (i + 1)).attr("value", currentB[i]);
+          } else if (i == 3) {
+            $("#knobB" + (i + 1)).attr("value", currentB[i]);
+          }
+          $("#knobC" + (i + 1)).attr("value", currentC[i]);
+        }
+
+        //initializing the knobs
+        var Aknobs = [];
+        for (var i = 0; i < 4; ++i) {
+          Aknobs[i] = $('#knobA' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentA[i-1],
+            });
+        }
+
+        var Bknobs = [];
+        for (var i = 0; i < 5; ++i) {
+          Bknobs[i] = $('#knobB' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentB[i-1],
+            });
+        }
+
+
+        var Cknobs = [];
+        for (var i = 0; i < 6; ++i) {
+          Cknobs[i] = $('#knobC' + i).rotaryswitch({
+              minimum: 0,
+              maximum: nSettings,
+              step: 1,
+              showMarks: true,
+              startValue: currentC[i-1],
+            });
+        }
+
+        $("#bakeA").prop("disabled", true);
+        $("#bakeB").prop("disabled", true);
+        $("#bakeC").prop("disabled", true);
+
+        let machineType = jsPsych.data.getLastTrialData().trials[0].machine;
+        let nstars = jsPsych.data.getLastTrialData().trials[0].reward;
+
+        if (nstars == 1) {
+          $(".numStars").html(nstars + " star"); 
+        } else {
+          $(".numStars").html(nstars + " stars"); 
+        }
+
+        if (machineType == "A") {
+          if (nstars == starsA) {
+            $("#resA").attr("src","cake2.png");
+            $("#bottomtext").text("You earned " + starsA + " stars, the highest amount for this machine!");
+          }
+          $("#resB").hide();
+          $("#resC").hide();
+        } else if (machineType == "B") {
+          if (nstars == starsB) {
+            $("#resB").attr("src","cake2.png");
+            $("#bottomtext").text("You earned " + starsB + " stars, the highest amount for this machine!");
+          }
+          $("#resA").hide();
+          $("#resC").hide();
+        } else if (machineType == "C") {
+          if (nstars == starsC) {
+            $("#resC").attr("src","cake2.png");
+            $("#bottomtext").text("You earned " + starsC + " stars, the highest amount for this machine!");
+          }
+          $("#resB").hide();
+          $("#resA").hide();
+        }         
+
+        //Recording knob position with every click
+        Aknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            currentA[index-1] = knob.val();
+          });
+        })
+
+        Bknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            currentB[index-1] = knob.val();
+          });
+        })
+        
+        Cknobs.forEach(function (knob, index) {
+            knob.on('change', function() {
+            currentC[index-1] = knob.val();
+          });
+        })
+
+      }
+
+    }
+
+    const lastScreen = {
+      type: jsPsychSurveyText,
+      questions: [{prompt: '(Optional) If you would like to provide feedback about this task, please write your thoughts below.', rows:5}],
+      preamble: `<p>This concludes the experiment. Thank you for your time. Clicking on 'End Experiment' below will return you to Prolific. </p>`,
+      button_label: 'End Experiment',
+      on_finish: function(data){
+        //writeRealtimeDatabase(studyId+'/participantData/'+firebaseUserId+'/expData/feedback', data);
+        if (!DEBUG) {
+          //finalizeBlockRandomization(studyId, conditionName);
+          window.location = endLink;
+        }
+      }
+    }
+
+
+    var machineBlock1A = {
+      timeline: [input_trial, result_trial],
+      loop_function: function(data) {
+        if (starTotal >= starGoal) {
+          return false;
+        } else {
+          return true;
+        }
+      }
+    }
+
+    var machineBlock = {
+      timeline: [input_trial, result_trial],
+      loop_function: function(data) {
+        let nstars = data.last(2).trials[0].reward;
+        if (nstars == maxStars) {
+          return false;
+        } else if (trialNum < maxAttempts) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+
+    var threeovensBlock = {
+      timeline: [modular_input, modular_result],
+      loop_function: function(data) {
+        if (starTotal >= starGoal) {
+          return false;
+        } else {
+          return true;
+        }
+      }
+    }
+
+    var nodeA = {
+      timeline: [introA, machineBlock]
+    }
+
+    var nodeB = {
+      timeline: [introB, machineBlock]
+    }
+
+    var nodeC = {
+      timeline: [introC, machineBlock]
+    }
+
+    var blocks1B = {
+      timeline: [nodeA, nodeB, nodeC],
+      loop_function: function(data) {
+        if (blockNum < nBlocks) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+    }
+
+    timeline.push(consent);
+    timeline.push(preload_media);
+    timeline.push(instructions);
+    timeline.push(blocks1B);
+    timeline.push(intro3ovens);
+    timeline.push(threeovensBlock);
+    timeline.push(lastScreen);
+
+    jsPsych.run(timeline);
+
+  </script>
+</html>
